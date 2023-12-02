@@ -7,6 +7,7 @@ import { Button } from "primereact/button";
 import { Dialog } from "primereact/dialog";
 import { InputText } from "primereact/inputtext";
 import { FilterMatchMode } from "primereact/api";
+import { ProgressSpinner } from "primereact/progressspinner";
 const Admin = () => {
   let emptyDetails = {
     id: null,
@@ -21,12 +22,11 @@ const Admin = () => {
     email: { value: null, matchMode: FilterMatchMode.IN },
     role: { value: null, matchMode: FilterMatchMode.IN },
   });
-  const [memberDialog, setMemberDialog] = useState(false);
+
   const [deletememberDialog, setDeleteMemberDialog] = useState(false);
   const [deletemembersDialog, setDeleteMembersDialog] = useState(false);
   const [member, setMember] = useState(emptyDetails);
   const [selectedMembers, setSelectedMembers] = useState(null);
-  const [submitted, setSubmitted] = useState(false);
   const [globalFilter, setGlobalFilter] = useState(null);
   const toast = useRef(null);
   const dt = useRef(null);
@@ -36,7 +36,6 @@ const Admin = () => {
       "https://geektrust.s3-ap-southeast-1.amazonaws.com/adminui-problem/members.json"
     );
     const data = await response.json();
-    console.log("data", data);
     setMembers(data);
   };
 
@@ -54,67 +53,26 @@ const Admin = () => {
     setGlobalFilter(value);
   };
 
-  const searchMembers = (
+  const header = (
     <div className='flex flex-wrap gap-2 align-items-center justify-content-between'>
+      <span className='p-input-icon-left'>
+        <i className='pi pi-search search-icon' />
+        <InputText
+          type='search'
+          onChange={onGlobalFilterChange}
+          placeholder='Search..'
+          className='search-icon'
+        />
+      </span>
       <Button
-        label='Delete'
+        label='Delete Selected'
         icon='pi pi-trash'
         severity='danger'
         onClick={() => setDeleteMembersDialog(true)}
         disabled={!selectedMembers || !selectedMembers.length}
       />
-      <span className='p-input-icon-left'>
-        <i className='pi pi-search' />
-        <InputText
-          type='search'
-          onChange={onGlobalFilterChange}
-          placeholder='Search..'
-        />
-      </span>
     </div>
   );
-
-  const editMember = (member) => {
-    setMember({ ...member });
-    setMemberDialog(true);
-  };
-  const hideDialog = () => {
-    setSubmitted(false);
-    setMemberDialog(false);
-  };
-  const findIndexById = (id) => {
-    let index = -1;
-    for (let i = 0; i < members.length; i++) {
-      if (members[i].id == id) {
-        index = i;
-        break;
-      }
-    }
-    return index;
-  };
-  const saveMember = () => {
-    setSubmitted(true);
-    console.log("member", member);
-    if (member.name.trim()) {
-      let _members = [...members];
-      let _member = { ...member };
-      if (member.id) {
-        const index = findIndexById(member.id);
-        _members[index] = _member;
-
-        _member[index] = _member;
-        toast.current.show({
-          severity: "success",
-          summary: "Successful",
-          detial: "Member details updated",
-          life: 3000,
-        });
-      }
-      setMembers(_members);
-      setMemberDialog(false);
-      setMember(emptyDetails);
-    }
-  };
 
   const confirmDeleteMember = (member) => {
     setMember(member);
@@ -145,18 +103,6 @@ const Admin = () => {
     });
   };
 
-  const memberDialogFooter = (
-    <>
-      <Button label='cancel' icon='pi pi-times' outlined onClick={hideDialog} />
-      <Button
-        label='save'
-        icon='pi pi-check'
-        severity='danger'
-        outlined
-        onClick={saveMember}
-      />
-    </>
-  );
   const hideDeleteMemberDialog = () => {
     setDeleteMemberDialog(false);
   };
@@ -171,7 +117,11 @@ const Admin = () => {
         label='No'
         icon='pi pi-times'
         outlined
-        onClick={hideDeleteMemberDialog}
+        onClick={
+          deletememberDialog == true
+            ? hideDeleteMemberDialog
+            : hideDeleteMembersDialog
+        }
       />
       <Button
         label='Yes'
@@ -185,165 +135,145 @@ const Admin = () => {
     </>
   );
 
-  const onInputChange = (e, name) => {
-    const val = (e.target && e.target.value) || "";
-    let _member = { ...member };
-    _member[`${name}`] = val;
+  const onInputChange = (e) => {
+    let _members = [...members];
+    let { newData, index } = e;
+    _members[index] = newData;
 
-    setMember(_member);
+    setMembers(_members);
+    toast.current.show({
+      severity: "success",
+      summary: "Successful",
+      detail: "Member Updated",
+      life: 3000,
+    });
   };
-  const actionBodyTemplate = (rowData) => {
+
+  const textEditor = (options, name) => {
     return (
-      <>
-        <Button
-          icon='pi pi-pencil'
-          rounded
-          outlined
-          className='mr-2 edit'
-          onClick={() => editMember(rowData)}
+      <div className='flex flex-column'>
+        <InputText
+          id={name}
+          value={options.value}
+          onChange={(e) => options.editorCallback(e.target.value)}
+          required
+          className={classNames({ "p-invalid": !options.value })}
         />
-        <Button
-          icon='pi pi-trash'
-          rounded
-          outlined
-          severity='danger'
-          className='mr-2 delete'
-          onClick={() => confirmDeleteMember(rowData)}
-        />
-      </>
+        {!options.value && (
+          <small className='p-error'>{name} is required.</small>
+        )}
+      </div>
     );
   };
+  const deleteButton = (rowData) => {
+    return (
+      <Button
+        icon='pi pi-trash'
+        rounded
+        outlined
+        severity='danger'
+        className='mr-2 delete'
+        onClick={() => confirmDeleteMember(rowData)}
+      />
+    );
+  };
+
   return (
     <div>
-      <h3 className='header' style={{ textAlign: "center", color: "#0f0f0f" }}>
-        Admin Dashboard
-      </h3>
-      <Toast ref={toast} />
-      <div className=' card'>
-        <DataTable
-          ref={dt}
-          selection={selectedMembers}
-          value={members}
-          onSelectionChange={(e) => setSelectedMembers(e.value)}
-          dataKey='id'
-          selectionPageOnly
-          paginator
-          showGridlines
-          rows={10}
-          rowsPerPageOptions={[5, 10, 25]}
-          paginatorTemplate='FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown'
-          currentPageReportTemplate='Showing {first} to {last} of {totalRecords} members'
-          filters={filters}
-          globalFilterFields={["name", "email", "role"]}
-          header={searchMembers}
-          tableStyle={{ minWidth: "50rem", maxWidth: "100vw" }}
-        >
-          <Column selectionMode='multiple' exportable={false}></Column>
-          <Column
-            field='name'
-            header='Name'
-            sortable
-            style={{ minWidth: "12rem" }}
-          ></Column>
-          <Column
-            field='email'
-            header='Email'
-            sortable
-            style={{ minWidth: "16rem" }}
-          ></Column>
-          <Column field='role' header='Role'></Column>
-          <Column
-            header='Actions'
-            body={actionBodyTemplate}
-            exportable={false}
-            style={{ minWidth: "2rem" }}
-          ></Column>
-        </DataTable>
-      </div>
-      <Dialog
-        visible={memberDialog}
-        style={{ width: "32rem" }}
-        breakpoints={{ "960px": "75vw", "641px": "90vw" }}
-        header='Member Details'
-        modal
-        className='p-fluid'
-        footer={memberDialogFooter}
-        onHide={hideDialog}
-      >
-        <div className='field'>
-          <label htmlFor='name' className='font-bold'>
-            Name
-          </label>
-          <InputText
-            id='name'
-            value={member.name}
-            onChange={(e) => onInputChange(e, "name")}
-            required
-            autoFocus
-            className={classNames({ "p-invalid": submitted && !member.name })}
-          />
-          {submitted && !member.name && (
-            <small className='p-err'>Name is required</small>
-          )}
-        </div>
-        <div className='field'>
-          <label htmlFor='email' className='font-bold'>
-            Email
-          </label>
-          <InputText
-            id='email'
-            value={member.email}
-            onChange={(e) => onInputChange(e, "email")}
-            required
-            className={classNames({ "p-invalid": submitted && !member.email })}
-          />
-          {submitted && !member.email && (
-            <small className='p-err'>Email is required</small>
-          )}
-        </div>
-        <div className='field'>
-          <label htmlFor='email' className='font-bold'>
-            Role
-          </label>
-          <InputText
-            id='role'
-            value={member.role}
-            onChange={(e) => onInputChange(e, "role")}
-            required
-            className={classNames({ "p-invalid": submitted && !member.role })}
-          />
-          {submitted && !member.role && (
-            <small className='p-err'>Role is required</small>
-          )}
-        </div>
-      </Dialog>
-      <Dialog
-        visible={deletememberDialog || deletemembersDialog}
-        style={{ width: "32rem" }}
-        breakpoints={{ "960px": "75vw", "641px": "90vw" }}
-        header='Confirm'
-        modal
-        footer={deleteMemberDialogFooter}
-        onHide={
-          deletememberDialog == true
-            ? hideDeleteMemberDialog
-            : deletememberDialog
-            ? hideDeleteMembersDialog
-            : true
-        }
-      >
-        <div className='confirmation-content'>
-          <i
-            className='pi pi-exclamation-triangle mr-3'
-            style={{ fontSize: "2rem" }}
-          />
-          {member && (
-            <span>
-              Are you sure you want to delete <b>{member.name}</b>
-            </span>
-          )}
-        </div>
-      </Dialog>
+      {!members && (
+        <ProgressSpinner
+          style={{ width: "50px", height: "50px" }}
+          strokeWidth='8'
+          fill='var(--surface-ground)'
+          animationDuration='.5s'
+        />
+      )}
+      {members && (
+        <>
+          <Toast ref={toast} />
+          <div className=' card'>
+            <DataTable
+              ref={dt}
+              selection={selectedMembers}
+              value={members}
+              onSelectionChange={(e) => setSelectedMembers(e.value)}
+              dataKey='id'
+              selectionPageOnly
+              paginator
+              editMode='row'
+              onRowEditComplete={onInputChange}
+              rows={10}
+              rowsPerPageOptions={[5, 10, 25]}
+              paginatorTemplate='FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown'
+              currentPageReportTemplate='Showing {first} to {last} of {totalRecords} members'
+              filters={filters}
+              globalFilterFields={["name", "email", "role"]}
+              header={header}
+              tableStyle={{ minWidth: "50rem", maxWidth: "100vw" }}
+            >
+              <Column selectionMode='multiple' exportable={false}></Column>
+              <Column
+                field='name'
+                header='Name'
+                sortable
+                editor={(options) => textEditor(options, "name")}
+                style={{ minWidth: "12rem" }}
+              ></Column>
+              <Column
+                field='email'
+                header='Email'
+                sortable
+                editor={(options) => textEditor(options, "email")}
+                style={{ minWidth: "16rem" }}
+              ></Column>
+              <Column
+                field='role'
+                header='Role'
+                editor={(options) => textEditor(options, "role")}
+              ></Column>
+              <Column
+                bodyClassName='edit'
+                rowEditor
+                header='Edit'
+                bodyStyle={{ textAlign: "left", paddingBottom: "8px" }}
+              />
+              <Column
+                bodyClassName='delete'
+                header='Delete'
+                bodyStyle={{ textAlign: "left", paddingBottom: "8px" }}
+                body={(data, props) => deleteButton(data)}
+              />
+            </DataTable>
+          </div>
+          <Dialog
+            visible={deletememberDialog || deletemembersDialog}
+            style={{ width: "32rem" }}
+            breakpoints={{ "960px": "75vw", "641px": "90vw" }}
+            header='Confirm'
+            modal
+            footer={deleteMemberDialogFooter}
+            onHide={
+              deletememberDialog == true
+                ? hideDeleteMemberDialog
+                : deletemembersDialog == true
+                ? hideDeleteMembersDialog
+                : true
+            }
+          >
+            <div className='confirmation-content'>
+              <i
+                className='pi pi-exclamation-triangle mr-3'
+                style={{ fontSize: "2rem" }}
+              />
+              {member && (
+                <span>
+                  Are you sure you want to delete <b>{member.name}</b>
+                </span>
+              )}
+            </div>
+          </Dialog>
+        </>
+      )}
     </div>
   );
 };
